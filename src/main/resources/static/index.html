@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BetterLaundry</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #111; max-width: 900px; }
+    h1 { margin: 0 0 4px; }
+    .muted { color: #666; font-size: 0.9rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 16px 0 20px; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
+    .row { display: flex; justify-content: space-between; margin-top: 6px; }
+    .state { font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #e5e5e5; padding: 8px; font-size: 0.9rem; text-align: left; }
+    #ai { border: 1px solid #ddd; border-radius: 6px; padding: 10px; min-height: 48px; white-space: pre-wrap; }
+    button { margin-top: 8px; padding: 8px 12px; }
+    #toast { position: fixed; right: 16px; bottom: 16px; background: #111; color: #fff; padding: 10px 12px; display: none; }
+    #toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <h1>BetterLaundry</h1>
+  <div class="muted" id="updated">Loading...</div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Washer (Samsung WF50BG8300AE)</h3>
+      <div class="row"><span>State</span><span id="washer-state" class="state">-</span></div>
+      <div class="row"><span>Job</span><span id="washer-job">-</span></div>
+      <div class="row"><span>Cycle</span><span id="washer-cycle">-</span></div>
+      <div class="row"><span>Temperature Level</span><span id="washer-temp">-</span></div>
+      <div class="row"><span>Rinses</span><span id="washer-rinses">-</span></div>
+      <div class="row"><span>Soil Level</span><span id="washer-soil">-</span></div>
+      <div class="row"><span>Remaining Time</span><span id="washer-remprog">-</span></div>
+      <div class="row"><span>Finishes At</span><span id="washer-eta">-</span></div>
+    </div>
+    <div class="card">
+      <h3>Dryer (Samsung DVG50BG8300E)</h3>
+      <div class="row"><span>State</span><span id="dryer-state" class="state">-</span></div>
+      <div class="row"><span>Job</span><span id="dryer-job">-</span></div>
+      <div class="row"><span>Cycle</span><span id="dryer-cycle">-</span></div>
+      <div class="row"><span>Temperature Level</span><span id="dryer-drying-temp">-</span></div>
+      <div class="row"><span>Wrinkle Prevent</span><span id="dryer-wrinkle">-</span></div>
+      <div class="row"><span>Remaining Time</span><span id="dryer-remprog">-</span></div>
+      <div class="row"><span>Finishes At</span><span id="dryer-eta">-</span></div>
+    </div>
+  </div>
+
+  <h3>Recent Cycles</h3>
+  <table>
+    <thead><tr><th>Device</th><th>Duration</th><th>End Time</th><th>Cycle</th><th>Temperature Level</th><th>Rinses</th><th>Soil Level</th><th>Wrinkle Prevent</th></tr></thead>
+    <tbody id="history"><tr><td colspan="8">Loading...</td></tr></tbody>
+  </table>
+
+  <h3>AI Insights</h3>
+  <div id="ai">Click Generate for a summary powered by Gemini.</div>
+  <button id="ai-btn">Generate</button>
+
+  <div id="toast"></div>
+  <script>
+    // e.g. 5/1/2026, 7:01 PM (local time, no seconds)
+    const fmt = (iso) =>
+        iso
+            ? new Date(iso).toLocaleString("en-US", {
+                month: "numeric",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+            })
+            : "-";
+    const txt = (id, v) => document.getElementById(id).textContent = v || "-";
+
+    /** "x min (y% progress)" when active; "-" when inactive or both missing. */
+    function fmtRemainingProgress(inactive, minutes, percent) {
+      if (inactive) return "-";
+      const hasMin = minutes != null && minutes !== "";
+      const hasPct = percent != null && percent !== "";
+      if (!hasMin && !hasPct) return "-";
+      const minPart = hasMin ? `${minutes} min` : "";
+      const pctPart = hasPct ? `(${percent}% progress)` : "";
+      if (hasMin && hasPct) return `${minPart} ${pctPart}`;
+      return hasMin ? minPart : pctPart;
+    }
+
+    async function refreshStatus() {
+      const data = await (await fetch("/api/status")).json();
+      const washerState = data.washer?.machineState || "-";
+      const dryerState = data.dryer?.machineState || "-";
+      const washerInactive = ["idle", "unknown"].includes(String(washerState).toLowerCase());
+      const dryerInactive = ["idle", "unknown"].includes(String(dryerState).toLowerCase());
+
+      txt("washer-state", washerState);
+      txt("washer-job", washerInactive ? "-" : data.washer?.jobState);
+      txt("washer-cycle", washerInactive ? "-" : data.washer?.cycleLabel);
+      txt("washer-temp", washerInactive ? "-" : data.washer?.waterTemperature);
+      txt("washer-rinses", washerInactive ? "-" : data.washer?.rinseCycles);
+      txt("washer-soil", washerInactive ? "-" : data.washer?.soilLevel);
+      txt("washer-remprog", fmtRemainingProgress(
+          washerInactive,
+          data.washer?.remainingTimeMinutes,
+          data.washer?.progressPercent
+      ));
+      txt("washer-eta", washerInactive ? "-" : fmt(data.washer?.completionTime));
+
+      txt("dryer-state", dryerState);
+      txt("dryer-job", dryerInactive ? "-" : data.dryer?.jobState);
+      txt("dryer-cycle", dryerInactive ? "-" : data.dryer?.cycleLabel);
+      txt("dryer-drying-temp", dryerInactive ? "-" : data.dryer?.dryerDryingTemperature);
+      txt("dryer-wrinkle", dryerInactive ? "-" : data.dryer?.wrinklePrevent);
+      txt("dryer-remprog", fmtRemainingProgress(
+          dryerInactive,
+          data.dryer?.remainingTimeMinutes,
+          data.dryer?.progressPercent
+      ));
+      txt("dryer-eta", dryerInactive ? "-" : fmt(data.dryer?.completionTime));
+      txt("updated", "Updated " + new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }));
+    }
+
+    async function refreshHistory() {
+      const rows = await (await fetch("/api/history?limit=12")).json();
+      const body = document.getElementById("history");
+      if (!rows.length) { body.innerHTML = '<tr><td colspan="8">No data yet.</td></tr>'; return; }
+      body.innerHTML = rows.map(r =>
+      `<tr>
+        <td>${r.device ?? r.deviceType ?? "-"}</td>
+        <td>${r.durationMin != null ? r.durationMin : "-"} min</td>
+        <td>${fmt(r.endTime)}</td>
+        <td>${r.cycle ?? "-"}</td>
+        <td>${r.temp ?? "-"}</td>
+        <td>${r.rinses ?? "-"}</td>
+        <td>${r.soil ?? "-"}</td>
+        <td>${r.wrinklePrevent ?? "-"}</td>
+        </tr>`
+      ).join("");
+    }
+
+    async function fetchAi() {
+      const btn = document.getElementById("ai-btn");
+      btn.disabled = true;
+      txt("ai", "Generating...");
+      try {
+        const data = await (await fetch("/api/ai")).json();
+        txt("ai", data.summary || "No summary returned.");
+      } catch {
+        txt("ai", "Unable to fetch AI summary.");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function connectEvents() {
+      const es = new EventSource("/api/events");
+      es.addEventListener("cycle-complete", e => {
+        const toast = document.getElementById("toast");
+        toast.textContent = e.data;
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 4000);
+      });
+    }
+
+    document.getElementById("ai-btn").addEventListener("click", fetchAi);
+    refreshStatus().catch(() => txt("updated", "Status unavailable"));
+    refreshHistory().catch(() => {});
+    connectEvents();
+    setInterval(() => refreshStatus().catch(() => {}), 30000);
+    setInterval(() => refreshHistory().catch(() => {}), 60000);
+  </script>
+</body>
+</html>
