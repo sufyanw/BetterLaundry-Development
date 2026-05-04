@@ -68,9 +68,13 @@ public class DevicePollingService implements Pollable {
     }
 
     public void start() {
-        scheduler.scheduleAtFixedRate(
-                this::poll, 0, intervalSeconds, TimeUnit.SECONDS);
-        log.info("Polling every {}s for {} device(s).", intervalSeconds, devices.size());
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                poll();
+            } catch (SmartThingsAPIException e) {
+                log.warn("Poll tick failed: {}", e.getMessage());
+            }
+        }, 0, intervalSeconds, TimeUnit.SECONDS);
     }
 
     public void stop() {
