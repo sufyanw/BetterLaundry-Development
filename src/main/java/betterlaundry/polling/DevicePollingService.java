@@ -5,6 +5,7 @@ import betterlaundry.config.DeviceConstants;
 import betterlaundry.db.DatabaseManager;
 import betterlaundry.exception.SmartThingsAPIException;
 import betterlaundry.model.*;
+import betterlaundry.interfaces.Pollable;
 import betterlaundry.parser.DeviceStatusParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
@@ -18,7 +19,7 @@ import java.util.concurrent.*;
 // having an interval is helpful because it allows us to get data from the API at a cadence.
 // By being able to get data this way, there's still an advantage to using BetterLaundry 
 // over using the SmartThings app on your phone directly because you still get real-time updates
-public class DevicePollingService {
+public class DevicePollingService implements Pollable {
 
     private static final Logger log = LoggerFactory.getLogger(DevicePollingService.class);
 
@@ -68,7 +69,7 @@ public class DevicePollingService {
 
     public void start() {
         scheduler.scheduleAtFixedRate(
-                this::pollAll, 0, intervalSeconds, TimeUnit.SECONDS);
+                this::poll, 0, intervalSeconds, TimeUnit.SECONDS);
         log.info("Polling every {}s for {} device(s).", intervalSeconds, devices.size());
     }
 
@@ -76,7 +77,8 @@ public class DevicePollingService {
         scheduler.shutdownNow();
     }
 
-    private void pollAll() {
+    @Override
+    public void poll() throws SmartThingsAPIException {
         for (LaundryDevice device : devices) {
             try {
                 pollDevice(device);

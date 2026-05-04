@@ -67,7 +67,7 @@ final class DevicePollingTest {
                 10
         );
 
-        invokePrivate(service, "pollAll", new Class[]{});
+        invokePrivate(service, "poll", new Class[]{});
 
         assertTrue(service.hasDeviceError("washer-1"));
     }
