@@ -9,7 +9,7 @@ BetterLaundry is an accessible web application that any device with internet acc
 
 BetterLaundry is hosted on Heroku. I have previous experience with Heroku from CS-UY 4513 Software Engineering, so deploying for this project was very easy. All I had to do was create the app, add and commit my changes, and run `git push heroku main`. Then I set up a PostgreSQL Essential 0 database, and I was good to go. Note that I did all of this using the Heroku CLI.
 
-https://betterlaundry-322c320b9860.herokuapp.com/index.html
+~~https://betterlaundry-322c320b9860.herokuapp.com/index.html~~ deprecated since 05/15/2026
 
 ---
 ## Environment Variables
